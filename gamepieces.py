@@ -136,6 +136,7 @@ class GamePiece(pygame.sprite.Sprite):
             return False
 
 
+# Initialize the pieces that will be used in the game from a CSV file
 def init(path, default_grid_size=12):
     global grid_size
     grid_size = default_grid_size

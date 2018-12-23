@@ -48,6 +48,7 @@ def draw_menu():
 
 
 # Return which menu item is selected, if any
+# pos -  Mouse position object
 def get_menu_selection(pos):
     x = pos[0]
     y = pos[1]
@@ -55,6 +56,9 @@ def get_menu_selection(pos):
         return int(y / menu_item_px)
 
 
+# Display the info the selected piece
+# pos - Mouse position object
+# piece - Game piece object
 def draw_hover_box(pos, piece):
     x = pos[0] + 25
     y = pos[1] - 25
@@ -75,9 +79,9 @@ def draw_hover_box(pos, piece):
 ##########################################
 
 # Different spite groups used for drawing
-menu_sprites = pygame.sprite.Group()
-player_sprites = pygame.sprite.Group()
-placed_sprites = pygame.sprite.Group()
+menu_sprites = pygame.sprite.Group()   # The sprites to be displayed in the selection menu
+player_sprites = pygame.sprite.Group() # Right now, just the currently selected piece
+placed_sprites = pygame.sprite.Group() # These are the pieces that have been placed
 
 # Populate the menu sprites with constant sized images
 i = 0
@@ -91,7 +95,7 @@ for piece in gp.get_ref_pieces():
     menu_sprites.add(this_piece)
     i += 1
 
-# Create an infantry sprite as the currently selected unit
+# Create an infantry sprite as the initially selected unit
 player = gp.create_piece("infantry", True)
 player_sprites.add(player)
 
@@ -101,16 +105,18 @@ done = False
 # Used to manage how fast the screen updates
 clock = pygame.time.Clock()
 
-# -------- Main Program Loop -----------
-was_pressed = False
-last_keys = pygame.key.get_pressed()
-draw_hover = False
-angle_history = []
+
+# -------- Main Loop Vars -----------
+was_pressed = False  # Keeps track of the last mouse click state to limit actions to one per click
+last_keys = pygame.key.get_pressed()  # A map of all the keys currently pressed
+draw_hover = False  # Whether the info box should be drawn over the current piece
 magnitude_history = []
 pos_history = []
 last_pos = None
 line_points = []
 was_shot = False
+
+# -------- Main Program Loop -----------
 while not done:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -124,39 +130,31 @@ while not done:
     pos = pygame.mouse.get_pos()
     x = pos[0]
     y = pos[1]
+
+    # Check to see if the cursor is over an already placed piece
+    current_piece = gp.GamePiece.get_hovered_piece(pos)
+
+    # Determine how fast and where the mouse is moving
     if last_pos is not None:
+        # Find the magnitude and add to the history lists
         delta_x = x - last_pos[0]
         delta_y = y - last_pos[1]
         magnitude = math.sqrt(math.pow(delta_x, 2) + math.pow(delta_y, 2))
-        angle = 0
-        if delta_x is 0:
-            if delta_y > 0:
-                angle = 270
-            if delta_y < 0:
-                angle = 90
-        elif delta_y is 0:
-            if delta_x > 0:
-                angle = 0
-            if delta_x < 0:
-                angle = 180
-        elif delta_y is 0 and delta_x is 0:
-            angle = 0
-        else:
-            angle = math.degrees(math.atan2(delta_y,  delta_x))
         magnitude_history.append(magnitude)
-        angle_history.append(angle)
         pos_history.append(pos)
+
+        # Once there are enough history points, determine whether the movement was a 'shot'
         if len(magnitude_history) > 4:
+            # Drop the oldest item in the history lists
             magnitude_history.pop(0)
-            angle_history.pop(0)
             pos_history.pop(0)
+
+            # If there's a high average magnitude register the movement as a shot
             magnitude_ave = statistics.mean(magnitude_history)
-            magnitude_std = statistics.stdev(magnitude_history)
-            angle_ave = statistics.mean(angle_history)
-            angle_std = statistics.stdev(angle_history)
-            # If there's a high magnitude and consistent angle, register this as a shot
+            #   But wait until one shot has been completed before registering a new one
             if magnitude_ave > 5 and was_shot is False:
                 print("shot from:", pos_history[0])
+                # Only shoot if the mouse starting point was over a piece
                 if current_piece is not None and current_piece.is_hovered(pos_history[0]) \
                         and current_piece.stats.piece_type is not 'b':
                     line_points.append([[pos_history[0][0], pos_history[0][1]], [x, y]])
@@ -168,9 +166,7 @@ while not done:
 
     last_pos = pos
 
-    # Check to see if the cursor is over an already placed piece
-    current_piece = gp.GamePiece.get_hovered_piece(pos)
-
+    # Check to see if the mouse is pressed and deal with that
     pressed = pygame.mouse.get_pressed()
 
     # Display info box on right click when no item is selected
@@ -222,13 +218,19 @@ while not done:
 
     # Perform keyboard actions, if necessary
     current_keys = pygame.key.get_pressed()
+    #   R - Rotate selected piece clockwise
     if current_keys[pygame.K_r] and last_keys[pygame.K_r] is 0:
         player.rotate(-22.5)
+    #   E - Rotate counter clockwise
     if current_keys[pygame.K_e] and last_keys[pygame.K_e] is 0:
         player.rotate(22.5)
+    #   Esc - Deselect the currently selected item
     if current_keys[pygame.K_ESCAPE] and last_keys[pygame.K_ESCAPE] is 0:
         player_sprites.empty()
         player = None
+
+    # Used to compare currently pressed keys to the keys pressed during the last loop
+    # This allows for executing a command once per key press
     last_keys = current_keys
 
     # Go ahead and update the screen with what we've drawn.
